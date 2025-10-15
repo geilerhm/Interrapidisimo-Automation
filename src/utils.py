@@ -12,7 +12,18 @@ from selenium.webdriver.support import expected_conditions as EC
 # ============================================================
 def create_or_load_excel():
     today = datetime.date.today().strftime("%Y-%m-%d")
-    file_name = f"shipments_{today}.xlsx"
+    
+    # Define the reports directory relative to the project root
+    # Assuming utils.py is in src/
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    reports_dir = os.path.join(project_root, 'data', 'excel_reports')
+    
+    # Ensure the directory exists
+    os.makedirs(reports_dir, exist_ok=True)
+    
+    # Construct the full file path
+    file_name = os.path.join(reports_dir, f"shipments_{today}.xlsx")
+    
     if os.path.exists(file_name):
         wb = load_workbook(file_name)
         ws = wb.active
