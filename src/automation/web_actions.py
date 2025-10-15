@@ -6,9 +6,14 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium import webdriver
-from selenium.common.exceptions import UnexpectedAlertPresentException # Import this
+from selenium.common.exceptions import UnexpectedAlertPresentException, TimeoutException
 from src.utils import create_or_load_excel, handle_alert_and_reopen
 from src.config import LOGIN_URL
+
+
+class AuthenticationError(Exception):
+    """Custom exception for authentication errors."""
+    pass
 
 # ============================================================
 # 🧱 SETUP SELENIUM DRIVER
@@ -31,7 +36,7 @@ def setup_driver(show_browser=True): # Add show_browser parameter
 def login(driver, username, password):
     print("🌐 [STEP 1] Logging in...")
     driver.get(LOGIN_URL)
-    wait = WebDriverWait(driver, 20)
+    wait = WebDriverWait(driver, 25) # A single wait object with a 25s timeout
 
     user_input = wait.until(EC.presence_of_element_located((By.ID, "usernameLogin")))
     pass_input = wait.until(EC.presence_of_element_located((By.ID, "passwordLogin")))
@@ -39,11 +44,51 @@ def login(driver, username, password):
     pass_input.send_keys(password)
 
     driver.find_element(By.ID, "botonLogin").click()
-    print("🔐 [login] Waiting for validation...")
+    print("🔐 [login] Waiting for validation result...")
+
     try:
-        wait.until_not(EC.presence_of_element_located((By.ID, "swal2-title")))
-    except:
-        pass
+        # This inner function will be our custom wait condition.
+        # It returns a truthy value ("success" or "error") when the condition is met,
+        # and False otherwise, telling the wait to continue.
+        def check_login_status(d):
+            try:
+                # Find the alert element
+                alert_element = d.find_element(By.ID, "swal2-title")
+                
+                # If the alert is not visible, login is successful.
+                if not alert_element.is_displayed():
+                    return "success"
+                
+                # If the alert shows the error text, it's a failure.
+                if "Error de autenticación" in alert_element.text:
+                    return "error"
+                
+                # If none of the above, the "Validando..." message is still up.
+                # Return False to keep waiting.
+                return False
+
+            except:
+                # If the element can't be found in the DOM, it means the alert is gone.
+                # This is a successful login.
+                return "success"
+
+        # We wait until our custom check_login_status function returns something other than False.
+        final_status = wait.until(check_login_status)
+        
+        print(f"  [login] Wait finished with status: {final_status}")
+
+        if final_status == "error":
+            raise AuthenticationError("Credenciales incorrectas. Por favor, verifique su usuario y contraseña.")
+
+    except TimeoutException:
+        # This will be raised by wait.until() if check_login_status always returns False for 25 seconds.
+        print("  [login] Timeout: 'Validando...' message was stuck on screen.")
+        raise Exception("Login failed: validation timed out.")
+    except AuthenticationError:
+        raise # Re-raise for the UI to catch
+    except Exception as e:
+        print(f"❌ [login] An unexpected error occurred during validation: {e}")
+        raise
 
     print("✅ [login] Logged in successfully.")
     return wait

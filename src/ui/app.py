@@ -8,7 +8,7 @@ import time # For potential delays or sleep in automation
 import sys
 import os
 
-from src.automation.web_actions import setup_driver, login, open_shipment_explorer, process_single_shipment
+from src.automation.web_actions import setup_driver, login, open_shipment_explorer, process_single_shipment, AuthenticationError
 from src.config import LOGIN_URL # Only LOGIN_URL is needed from config now
 from src.utils import create_or_load_excel # Import create_or_load_excel
 
@@ -134,12 +134,11 @@ class AutomationController:
 
         try:
             self.app.after(0, lambda: self.app.status_bar.set_status("Iniciando navegador..."))
-            self.driver = setup_driver(show_browser=self.show_browser) # Pass show_browser
+            self.driver = setup_driver(show_browser=self.show_browser)
             
             self.app.after(0, lambda: self.app.status_bar.set_status("Iniciando sesión..."))
             login(self.driver, self.username, self.password)
             
-            # Open shipment explorer ONCE before the loop
             self.app.after(0, lambda: self.app.status_bar.set_status("Abriendo explorador de envíos..."))
             open_shipment_explorer(self.driver)
 
@@ -151,44 +150,52 @@ class AutomationController:
                 success_one, needs_reopen = process_single_shipment(
                     self.driver, 
                     shipment_to_process, 
-                    lambda: self._update_progress_ui(processed_count + 1, total_shipments), # Callback for one item
+                    lambda: self._update_progress_ui(processed_count + 1, total_shipments),
                     wb, ws, file_name
                 )
 
                 if needs_reopen:
-                    self.app.after(0, lambda: Toast(self.app, f"⚠️ Redirección detectada. Reabriendo explorador para {shipment_to_process}...", success=False))
-                    self.app.after(0, lambda: self.app.status_bar.set_status(f"Reabriendo explorador para {shipment_to_process}..."))
+                    self.app.after(0, lambda: Toast(self.app, f"⚠️ Redirección detectada. Reabriendo explorador...", success=False))
+                    self.app.after(0, lambda: self.app.status_bar.set_status(f"Reabriendo explorador..."))
                     open_shipment_explorer(self.driver)
-                    continue # This will re-process the same shipment_to_process
+                    continue
 
-                # ONLY advance to the next shipment if no re-open was needed
                 if not needs_reopen:
                     if success_one:
                         processed_count += 1
                         self.app.after(0, lambda: Toast(self.app, f"✅ Guía {shipment_to_process} procesada.", success=True))
                     else:
                         self.app.after(0, lambda: Toast(self.app, f"❌ Guía {shipment_to_process} falló.", success=False))
-                    
-                    current_shipment_index += 1 # Moved inside the 'if not needs_reopen' block
+                    current_shipment_index += 1
 
-                # Update overall progress after each shipment
                 self._update_progress_ui(processed_count, total_shipments)
 
-            # After loop finishes (all shipments attempted)
+            # --- SUCCESS PATH ---
             self.app.after(0, lambda: Toast(self.app, "✅ Proceso de todas las guías completado.", success=True))
-            self.app.after(0, self.app.guides_frame.clear_entries)
-            self.app.after(0, lambda: self.app.guides_frame.on_key_release(None)) # Update counter and button state
+            self.app.after(1000, self.app.guides_frame.clear_entries) # Clear entries after 1s
+            self.app.after(1000, lambda: self.app.guides_frame.on_key_release(None))
+            self.app.after(1500, self._reset_ui_state) # Reset UI after 1.5s
 
+        except AuthenticationError as e:
+            # --- AUTHENTICATION FAILURE PATH ---
+            error_message = str(e)
+            self.app.after(0, lambda msg=error_message: Toast(self.app, f"❌ {msg}", success=False))
+            self.app.after(3500, self._reset_ui_state) # Reset UI after 3.5s to ensure toast is read
+        
         except Exception as e:
+            # --- GENERIC FAILURE PATH ---
             print(f"Automation error: {e}")
             import traceback
             traceback.print_exc()
             error_message = str(e)
             self.app.after(0, lambda msg=error_message: Toast(self.app, f"❌ Error crítico: {msg}", success=False))
+            self.app.after(3500, self._reset_ui_state) # Reset UI after 3.5s
+
         finally:
+            # --- CLEANUP ---
+            # The finally block is now only responsible for closing the browser driver.
             if self.driver:
                 self.driver.quit()
-            self.app.after(0, self._reset_ui_state)
 
     def _reset_ui_state(self):
         self.app.config(cursor="")
