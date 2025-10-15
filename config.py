@@ -1,0 +1,1 @@
+LOGIN_URL = "https://www3.interrapidisimo.com/SitioLogin/auth/login"
