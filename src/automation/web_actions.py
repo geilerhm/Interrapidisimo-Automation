@@ -13,10 +13,14 @@ from src.config import LOGIN_URL
 # ============================================================
 # 🧱 SETUP SELENIUM DRIVER
 # ============================================================
-def setup_driver():
+def setup_driver(show_browser=True): # Add show_browser parameter
     chrome_options = Options()
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-notifications")
+    if not show_browser: # Add headless argument if show_browser is False
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu") # Recommended for headless
+        chrome_options.add_argument("--no-sandbox") # Recommended for headless
     driver = webdriver.Chrome(service=Service(), options=chrome_options)
     print("✅ [setup_driver] Driver started successfully.")
     return driver

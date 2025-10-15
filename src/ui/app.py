@@ -32,12 +32,46 @@ class Toast(tk.Toplevel):
         self.geometry(f"+{x}+{y}")
         self.after(3000, self.destroy)
 
+class SettingsFrame(ttk.LabelFrame):
+    def __init__(self, parent):
+        super().__init__(parent, text="⚙️ Configuración", padding=15)
+        self.columnconfigure(0, weight=1)
+
+        # Dark/Light Mode Toggle
+        theme_label = ttk.Label(self, text="Modo Oscuro/Claro:")
+        theme_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.theme_toggle = ttk.Checkbutton(self, style="Switch.TCheckbutton", command=self._toggle_theme)
+        self.theme_toggle.grid(row=0, column=1, sticky="e", padx=5, pady=5)
+
+        # Show Browser Toggle
+        browser_label = ttk.Label(self, text="Mostrar Navegador:")
+        browser_label.grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        self.show_browser_var = tk.BooleanVar(value=False) # Default to NOT showing browser
+        self.show_browser_toggle = ttk.Checkbutton(self, style="Switch.TCheckbutton", variable=self.show_browser_var)
+        self.show_browser_toggle.grid(row=1, column=1, sticky="e", padx=5, pady=5)
+
+    def _toggle_theme(self):
+        sv_ttk.set_theme("light" if sv_ttk.get_theme() == "dark" else "dark")
+
+    def get_show_browser_setting(self):
+        return self.show_browser_var.get()
+
+    def disable_fields(self):
+        self.theme_toggle.config(state="disabled")
+        self.show_browser_toggle.config(state="disabled")
+
+    def enable_fields(self):
+        self.theme_toggle.config(state="normal")
+        self.show_browser_toggle.config(state="normal")
+
+
 class AutomationController:
-    def __init__(self, app_instance, username, password, guides):
+    def __init__(self, app_instance, username, password, guides, show_browser): # Add show_browser
         self.app = app_instance
         self.username = username
         self.password = password
         self.guides = guides
+        self.show_browser = show_browser # Store show_browser
         self.driver = None
         self.stop_event = threading.Event()
 
@@ -55,7 +89,7 @@ class AutomationController:
 
         try:
             self.app.after(0, lambda: self.app.status_bar.set_status("Iniciando navegador..."))
-            self.driver = setup_driver()
+            self.driver = setup_driver(show_browser=self.show_browser) # Pass show_browser
             
             self.app.after(0, lambda: self.app.status_bar.set_status("Iniciando sesión..."))
             login(self.driver, self.username, self.password)
@@ -115,6 +149,7 @@ class AutomationController:
         self.app.config(cursor="")
         self.app.status_bar.start_button.config(state="normal")
         self.app.credentials_frame.enable_fields()
+        self.app.settings_frame.enable_fields() # Enable settings fields
         self.app.guides_frame.enable()
         self.app.status_bar.set_status("Listo para iniciar." if self.app.guides_frame.get_guides() else "Ingrese guías para comenzar.")
         self.app.status_bar.set_progress(0)
@@ -134,7 +169,7 @@ class App(tk.Tk):
         self.geometry(f"{app_width}x{app_height}+{center_x}+{center_y}")
         self.minsize(800, 600)
 
-        sv_ttk.set_theme("dark")
+        sv_ttk.set_theme("light")
         style = ttk.Style()
         style.map("TEntry", fieldbackground=[("disabled", "#3c3c3c")])
         self.columnconfigure(0, weight=1)
@@ -150,25 +185,23 @@ class App(tk.Tk):
         header.columnconfigure(0, weight=1)
         title = ttk.Label(header, text="Interrapidisimo Bot", font=("", 24, "bold"))
         title.grid(row=0, column=0, sticky="w")
-        theme_toggle = ttk.Checkbutton(header, style="Switch.TCheckbutton", command=self.toggle_theme)
-        theme_toggle.grid(row=0, column=1, sticky="e")
-
-    def toggle_theme(self):
-        sv_ttk.set_theme("light" if sv_ttk.get_theme() == "dark" else "dark")
 
     def create_body(self):
         body = ttk.Frame(self)
         body.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
         body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, weight=1) # Added this line
         body.rowconfigure(1, weight=1)
 
         self.status_bar = StatusBar(body, self.start_bot_process)
         self.guides_frame = GuidesFrame(body, status_bar=self.status_bar)
         self.credentials_frame = CredentialsFrame(body)
+        self.settings_frame = SettingsFrame(body) # Added this line
 
-        self.credentials_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        self.guides_frame.grid(row=1, column=0, sticky="nsew")
-        self.status_bar.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        self.credentials_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10), padx=(0, 5))
+        self.settings_frame.grid(row=0, column=1, sticky="ew", pady=(0, 10), padx=(5, 0))
+        self.guides_frame.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        self.status_bar.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
 
     def create_footer(self):
         footer = ttk.Frame(self, padding=10)
@@ -186,15 +219,17 @@ class App(tk.Tk):
         
         username = self.credentials_frame.user_entry.get()
         password = self.credentials_frame.pass_entry.get()
+        show_browser = self.settings_frame.get_show_browser_setting() # Get setting
 
         self.config(cursor="watch")
         self.status_bar.start_button.config(state="disabled")
         self.credentials_frame.disable_fields()
+        self.settings_frame.disable_fields() # Disable settings fields
         self.guides_frame.disable()
         self.status_bar.set_progress(0)
         self.status_bar.set_status("Iniciando proceso de automatización...")
 
-        self.automation_controller = AutomationController(self, username, password, guides)
+        self.automation_controller = AutomationController(self, username, password, guides, show_browser) # Pass show_browser
         self.automation_thread = threading.Thread(target=self.automation_controller.run_automation, daemon=True)
         self.automation_thread.start()
 
