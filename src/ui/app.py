@@ -8,14 +8,9 @@ import time # For potential delays or sleep in automation
 import sys
 import os
 
-# Ensure project root is in path for web_actions and config imports
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from web_actions import setup_driver, login, open_shipment_explorer, process_single_shipment
-from config import LOGIN_URL # Only LOGIN_URL is needed from config now
-from utils import create_or_load_excel # Import create_or_load_excel
+from src.automation.web_actions import setup_driver, login, open_shipment_explorer, process_single_shipment
+from src.config import LOGIN_URL # Only LOGIN_URL is needed from config now
+from src.utils import create_or_load_excel # Import create_or_load_excel
 
 class Toast(tk.Toplevel):
     """A temporary, toast-like notification window."""

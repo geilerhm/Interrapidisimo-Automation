@@ -7,8 +7,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium import webdriver
 from selenium.common.exceptions import UnexpectedAlertPresentException # Import this
-from utils import create_or_load_excel, handle_alert_and_reopen
-from config import LOGIN_URL
+from src.utils import create_or_load_excel, handle_alert_and_reopen
+from src.config import LOGIN_URL
 
 # ============================================================
 # 🧱 SETUP SELENIUM DRIVER
