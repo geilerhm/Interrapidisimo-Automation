@@ -83,18 +83,19 @@ class AutomationController:
 
                 if needs_reopen:
                     self.app.after(0, lambda: Toast(self.app, f"⚠️ Redirección detectada. Reabriendo explorador para {shipment_to_process}...", success=False))
-                    # Re-open explorer and then continue to retry the *same* shipment
                     self.app.after(0, lambda: self.app.status_bar.set_status(f"Reabriendo explorador para {shipment_to_process}..."))
                     open_shipment_explorer(self.driver)
                     continue # This will re-process the same shipment_to_process
 
-                if success_one:
-                    processed_count += 1
-                    self.app.after(0, lambda: Toast(self.app, f"✅ Guía {shipment_to_process} procesada.", success=True))
-                else:
-                    self.app.after(0, lambda: Toast(self.app, f"❌ Guía {shipment_to_process} falló.", success=False))
-                
-                current_shipment_index += 1 # Move to next shipment only if no re-open needed
+                # ONLY advance to the next shipment if no re-open was needed
+                if not needs_reopen:
+                    if success_one:
+                        processed_count += 1
+                        self.app.after(0, lambda: Toast(self.app, f"✅ Guía {shipment_to_process} procesada.", success=True))
+                    else:
+                        self.app.after(0, lambda: Toast(self.app, f"❌ Guía {shipment_to_process} falló.", success=False))
+                    
+                    current_shipment_index += 1 # Moved inside the 'if not needs_reopen' block
 
                 # Update overall progress after each shipment
                 self._update_progress_ui(processed_count, total_shipments)
